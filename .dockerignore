@@ -1,0 +1,6 @@
+.git
+*.zip
+datasets/
+docs/
+lab/
+README.md

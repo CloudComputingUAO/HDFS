@@ -1,0 +1,85 @@
+name: hdfs-failure-lab
+
+x-hadoop: &hadoop
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: hdfs-failure-lab:3.4.1
+  networks:
+    - hdfs-net
+
+services:
+  namenode:
+    <<: *hadoop
+    hostname: namenode
+    command: ["namenode"]
+    ports:
+      - "9870:9870"
+    volumes:
+      - namenode-data:/data/name
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9870/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  datanode1:
+    <<: *hadoop
+    hostname: datanode1
+    command: ["datanode"]
+    depends_on:
+      namenode:
+        condition: service_healthy
+    volumes:
+      - datanode1-data:/data/data
+
+  datanode2:
+    <<: *hadoop
+    hostname: datanode2
+    command: ["datanode"]
+    depends_on:
+      namenode:
+        condition: service_healthy
+    volumes:
+      - datanode2-data:/data/data
+
+  datanode3:
+    <<: *hadoop
+    hostname: datanode3
+    command: ["datanode"]
+    depends_on:
+      namenode:
+        condition: service_healthy
+    volumes:
+      - datanode3-data:/data/data
+
+  client:
+    <<: *hadoop
+    hostname: hdfs-client
+    command: ["client"]
+    depends_on:
+      namenode:
+        condition: service_healthy
+    volumes:
+      - ./datasets:/workspace/datasets:ro
+      - client-output:/workspace/output
+
+  dataset-generator:
+    image: python:3.12-alpine
+    profiles: ["tools"]
+    working_dir: /workspace
+    volumes:
+      - ./datasets:/workspace/datasets
+      - ./scripts/generate_dataset.py:/workspace/generate_dataset.py:ro
+    command: ["python", "generate_dataset.py", "--output", "datasets/transactions.csv", "--rows", "85000"]
+
+networks:
+  hdfs-net:
+
+volumes:
+  namenode-data:
+  datanode1-data:
+  datanode2-data:
+  datanode3-data:
+  client-output:
