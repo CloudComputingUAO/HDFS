@@ -4,11 +4,6 @@
 
 En esta práctica construiremos un clúster HDFS, almacenaremos un archivo en bloques, inspeccionaremos sus réplicas y provocaremos fallos para observar cómo responde el sistema. El laboratorio está pensado para realizarse en clase, paso a paso, y después resolver un incidente sin una receta cerrada.
 
-**Duración:** 2–2,5 horas.  
-**Requisitos:** Docker Engine o Docker Desktop con Docker Compose v2, conexión a Internet para la primera construcción y aproximadamente 6 GB de RAM disponibles para Docker. No necesitas instalar Java, Python ni Hadoop en tu equipo.
-
-> **Alcance:** este entorno ejecuta HDFS (NameNode + DataNodes). No incluye YARN ni un motor Hadoop MapReduce. Los datos se distribuyen entre contenedores en un mismo host; no hay tolerancia a la pérdida del computador anfitrión.
-
 ## 1. Qué aprenderemos
 
 Al terminar podrás:
@@ -38,13 +33,13 @@ flowchart TB
 
 El NameNode mantiene el espacio de nombres y la ubicación de los bloques. Los DataNodes conservan los datos reales. El cliente consulta metadatos al NameNode, pero normalmente transfiere los datos directamente con los DataNodes.
 
-| Servicio | Función | Persistencia |
-| --- | --- | --- |
-| `namenode` | Metadatos y coordinación HDFS | Volumen `namenode-data` |
-| `datanode1` | Almacenamiento de bloques | Volumen `datanode1-data` |
-| `datanode2` | Almacenamiento de bloques | Volumen `datanode2-data` |
-| `datanode3` | Almacenamiento de bloques | Volumen `datanode3-data` |
-| `client` | Terminal para ejecutar comandos HDFS | Volumen `client-output` |
+| Servicio            | Función                                   | Persistencia              |
+| ------------------- | ----------------------------------------- | ------------------------- |
+| `namenode`          | Metadatos y coordinación HDFS             | Volumen `namenode-data`   |
+| `datanode1`         | Almacenamiento de bloques                 | Volumen `datanode1-data`  |
+| `datanode2`         | Almacenamiento de bloques                 | Volumen `datanode2-data`  |
+| `datanode3`         | Almacenamiento de bloques                 | Volumen `datanode3-data`  |
+| `client`            | Terminal para ejecutar comandos HDFS      | Volumen `client-output`   |
 | `dataset-generator` | Regenera el CSV desde Docker; es opcional | Carpeta local `datasets/` |
 
 **Configuración de laboratorio:** bloques de **1 MiB** (`1048576` bytes), factor de replicación **3**, tres DataNodes y NameNode único. El bloque pequeño es intencional: permite ver varios bloques sin necesitar un archivo de cientos de megabytes.
@@ -62,7 +57,7 @@ docker compose ps
 
 La primera construcción descarga Hadoop 3.4.1 y puede tardar varios minutos. El arranque inicial formatea el NameNode **solo si el volumen de metadatos está vacío**. No ejecutes `hdfs namenode -format` manualmente sobre un volumen que ya contiene datos.
 
-Abre la interfaz web del NameNode en **http://localhost:9870**. En *Datanodes* deberías ver tres nodos activos. Si todavía no aparecen, espera unos segundos y vuelve a cargar la página.
+Abre la interfaz web del NameNode en **http://localhost:9870**. En _Datanodes_ deberías ver tres nodos activos. Si todavía no aparecen, espera unos segundos y vuelve a cargar la página.
 
 Verifica el estado desde la terminal:
 
@@ -72,7 +67,7 @@ docker compose exec client hdfs dfsadmin -report
 
 **Antes de continuar:** confirma que el reporte muestra **3 Live datanodes**. Si no es así, consulta `docker compose logs --tail=100 namenode datanode1 datanode2 datanode3`.
 
-## 4. Experimento 1 — ¿Dónde está mi archivo? (20 min)
+## 4. Experimento 1 — ¿Dónde está mi archivo?
 
 El repositorio incluye `datasets/transactions.csv`, con 85.000 transacciones ficticias y más de 4 MiB de contenido.
 
@@ -88,7 +83,7 @@ docker compose exec client hdfs dfs -mkdir -p /datasets
 docker compose exec client hdfs dfs -put /workspace/datasets/transactions.csv /datasets/
 ```
 
-Si repites la práctica y el archivo ya existe, utiliza `-put -f` para reemplazarlo de manera explícita.
+> : Nota: Si repites la práctica y el archivo ya existe, utiliza `-put -f` para reemplazarlo de manera explícita.
 
 ### 4.3 Verificarlo
 
@@ -128,7 +123,7 @@ flowchart LR
 
 El diagrama ilustra las réplicas de **un** bloque; no representa la ubicación exacta que tendrá tu archivo. Para conocerla utiliza `fsck`.
 
-## 5. Experimento 2 — ¿Qué cambia al replicar? (20 min)
+## 5. Experimento 2 — ¿Qué cambia al replicar?
 
 Consulta el factor actual:
 
@@ -159,7 +154,7 @@ docker compose exec client hdfs dfs -setrep -w 3 /datasets/transactions.csv
 
 > `-setrep -w` espera a que se alcance el número de réplicas. Con un DataNode apagado, solicitar tres réplicas puede hacer que el comando espere indefinidamente. Ejecuta este paso con los tres DataNodes activos.
 
-## 6. Experimento 3 — Apaga un DataNode (25 min)
+## 6. Experimento 3 — Apaga un DataNode
 
 Primero confirma que hay tres réplicas y que el archivo se puede leer:
 
@@ -189,11 +184,11 @@ Prueba la lectura:
 docker compose exec client hdfs dfs -cat /datasets/transactions.csv | head -n 3
 ```
 
-**Preguntas:** ¿el archivo sigue disponible? ¿Qué diferencia hay entre *under-replicated* y *missing blocks*? ¿Puede HDFS recuperar tres copias distintas si solo quedan dos DataNodes?
+**Preguntas:** ¿el archivo sigue disponible? ¿Qué diferencia hay entre _under-replicated_ y _missing blocks_? ¿Puede HDFS recuperar tres copias distintas si solo quedan dos DataNodes?
 
 Con dos DataNodes vivos, HDFS puede seguir leyendo bloques con réplicas supervivientes, pero no puede mantener tres copias de cada bloque en tres nodos diferentes. En un clúster real, los resultados dependen de la ubicación de las réplicas y del número de nodos sanos.
 
-## 7. Experimento 4 — Recupera el nodo (15 min)
+## 7. Experimento 4 — Recupera el nodo
 
 ```bash
 docker compose start datanode1
@@ -205,7 +200,7 @@ Espera a que el NameNode vuelva a reconocer el DataNode y verifica las réplicas
 
 **Pregunta:** ¿recuperar un contenedor es lo mismo que reconstruir bloques perdidos?
 
-## 8. Experimento 5 — ¿Qué pasa si cae el NameNode? (15 min)
+## 8. Experimento 5 — ¿Qué pasa si cae el NameNode?
 
 En este laboratorio **no hay NameNode de respaldo**.
 
@@ -237,7 +232,7 @@ Si falla inmediatamente, espera unos segundos y repite. **No reformatees el Name
 
 **Discusión:** ¿qué cambiaría si tuviéramos NameNode HA? ¿Por qué distribuir bloques no elimina automáticamente los puntos únicos de fallo?
 
-## 9. Experimento 6 — Replicación no es backup (10 min)
+## 9. Experimento 6 — Replicación no es backup
 
 Antes de eliminar nada, crea una copia local dentro del volumen del cliente:
 
@@ -273,97 +268,18 @@ Restaura el archivo para el desafío final:
 docker compose exec client hdfs dfs -put /workspace/output/transactions-backup.csv /datasets/transactions.csv
 ```
 
-## 10. Desafío final — Incident Response Team (25 min)
+## 10. Comandos de referencia
 
-Ahora trabaja en equipo sin seguir comandos predeterminados. Lee [`lab/challenges.md`](lab/challenges.md).
-
-**Escenario:** el equipo de operaciones detecta un DataNode inactivo y bloques con menos réplicas de las esperadas. El servicio debe conservar el acceso al dataset y recuperar el nivel de replicación.
-
-Tu equipo debe entregar:
-
-1. Estado inicial del clúster y evidencia de los DataNodes vivos.
-2. Evidencia de la ubicación de los bloques y su replicación.
-3. Diagnóstico del incidente y evaluación del riesgo de pérdida de datos.
-4. Procedimiento de recuperación y evidencia del estado final.
-5. Una explicación breve: ¿qué puede resolver HDFS automáticamente y qué requiere intervención operativa?
-
-**Regla:** no uses `docker compose down -v` durante el desafío; ese comando borra los volúmenes del laboratorio.
-
-## 11. Comandos de referencia
-
-| Objetivo | Comando dentro del cliente |
-| --- | --- |
-| Listar archivos | `hdfs dfs -ls /datasets` |
-| Ver tamaños | `hdfs dfs -du -h /datasets` |
-| Subir archivo | `hdfs dfs -put archivo /datasets/` |
-| Descargar archivo | `hdfs dfs -get /datasets/archivo .` |
-| Leer archivo | `hdfs dfs -cat /datasets/archivo` |
-| Ver replicación | `hdfs dfs -stat '%r' /datasets/archivo` |
-| Cambiar replicación | `hdfs dfs -setrep -w 2 /datasets/archivo` |
+| Objetivo             | Comando dentro del cliente                              |
+| -------------------- | ------------------------------------------------------- |
+| Listar archivos      | `hdfs dfs -ls /datasets`                                |
+| Ver tamaños          | `hdfs dfs -du -h /datasets`                             |
+| Subir archivo        | `hdfs dfs -put archivo /datasets/`                      |
+| Descargar archivo    | `hdfs dfs -get /datasets/archivo .`                     |
+| Leer archivo         | `hdfs dfs -cat /datasets/archivo`                       |
+| Ver replicación      | `hdfs dfs -stat '%r' /datasets/archivo`                 |
+| Cambiar replicación  | `hdfs dfs -setrep -w 2 /datasets/archivo`               |
 | Inspeccionar bloques | `hdfs fsck /datasets/archivo -files -blocks -locations` |
-| Ver DataNodes | `hdfs dfsadmin -report` |
+| Ver DataNodes        | `hdfs dfsadmin -report`                                 |
 
 En los ejemplos de esta guía se ejecutan desde el host usando `docker compose exec client ...`.
-
-## 12. Resolución de problemas
-
-**Los DataNodes no aparecen:**
-
-```bash
-docker compose ps
-docker compose logs --tail=100 namenode datanode1 datanode2 datanode3
-```
-
-El arranque inicial puede tardar. Verifica que el NameNode está saludable antes de continuar.
-
-**El puerto 9870 está ocupado:** cambia `"9870:9870"` por `"9871:9870"` en `compose.yaml` y abre `http://localhost:9871`.
-
-**`-put` dice que el archivo ya existe:** usa `-put -f` si realmente deseas reemplazarlo.
-
-**`fsck` muestra bloques infrarreplicados tras apagar un nodo:** es esperable hasta que vuelva el nodo o existan suficientes DataNodes disponibles para recuperar el factor configurado.
-
-**El comando `-setrep -w 3` no termina:** comprueba que hay tres DataNodes sanos; no lo ejecutes con uno apagado.
-
-**El NameNode no inicia:** revisa sus logs. No elimines su volumen ni lo formatees sin entender las consecuencias.
-
-**Quieres regenerar el dataset desde Docker:**
-
-```bash
-docker compose --profile tools run --rm dataset-generator
-```
-
-El generador usa una semilla fija, por lo que produce datos reproducibles.
-
-## 13. Detener o reiniciar
-
-Para detener el laboratorio **sin perder datos**:
-
-```bash
-docker compose down
-```
-
-Para iniciarlo nuevamente:
-
-```bash
-docker compose up -d namenode datanode1 datanode2 datanode3 client
-```
-
-Para eliminar **todos los datos y metadatos del laboratorio** y empezar desde cero:
-
-```bash
-docker compose down -v
-```
-
-**Atención:** `down -v` elimina los volúmenes del NameNode, los DataNodes y la copia descargada del cliente. El CSV incluido en `datasets/` no se elimina porque está en el repositorio.
-
-## 14. Para la próxima clase
-
-Este laboratorio se concentra en **almacenamiento distribuido**. En una siguiente sesión podemos agregar YARN y ejecutar WordCount con Hadoop MapReduce, comparándolo con el laboratorio previo de Python y Redis.
-
-## Material adicional
-
-- [`docs/architecture.md`](docs/architecture.md): diagramas y explicación de los flujos de lectura y escritura.
-- [`docs/failure-scenarios.md`](docs/failure-scenarios.md): tabla de fallos y comportamiento esperado.
-- [`lab/challenges.md`](lab/challenges.md): reto evaluable y preguntas de cierre.
-
-**Referencia oficial:** [Apache Hadoop 3.4.1 Documentation](https://hadoop.apache.org/docs/r3.4.1/).
